@@ -259,6 +259,7 @@ main (int argc, char *argv[])
   memset (&dwg, 0, sizeof (Dwg_Data));
   if (has_v || !fmt)
     dwg.opts = opts;
+  dwg.opts |= DWG_OPTS_SKIP_EED_RAW;
 #if defined(USE_TRACING) && defined(HAVE_SETENV)
   if (!has_v)
     setenv ("LIBREDWG_TRACE", "1", 0);

@@ -245,11 +245,12 @@ dwg_read_file (const char *restrict filename, Dwg_Data *restrict dwg)
   FILE *fp;
   struct_stat_t attrib;
   Bit_Chain bit_chain = { 0 };
+  unsigned int opts = dwg->opts;
   int error;
 
-  loglevel = dwg->opts & DWG_OPTS_LOGLEVEL;
+  loglevel = opts & DWG_OPTS_LOGLEVEL;
   memset (dwg, 0, sizeof (Dwg_Data));
-  dwg->opts = loglevel;
+  dwg->opts = opts & (DWG_OPTS_LOGLEVEL | DWG_OPTS_SKIP_EED_RAW);
 
   if (strEQc (filename, "-"))
     {

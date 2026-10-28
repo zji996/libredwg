@@ -258,7 +258,7 @@ main (int argc, char *argv[])
         }
 
       memset (&dwg, 0, sizeof (Dwg_Data));
-      dwg.opts = opts;
+      dwg.opts = opts | DWG_OPTS_SKIP_EED_RAW;
       printf ("Reading DWG file %s\n", filename_in);
       error = dwg_read_file (filename_in, &dwg);
       if (error >= DWG_ERR_CRITICAL)

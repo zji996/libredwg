@@ -11455,6 +11455,8 @@ typedef struct _dwg_struct
 #define DWG_OPTS_INDXF    0x40
 #define DWG_OPTS_INJSON   0x80
 #define DWG_OPTS_IN       (DWG_OPTS_INDXF | DWG_OPTS_INJSON)
+/* Read-only use: omit the raw EED copy needed for lossless DWG rewriting. */
+#define DWG_OPTS_SKIP_EED_RAW 0x100
 
 typedef enum RESBUF_VALUE_TYPE
 {

@@ -423,7 +423,7 @@ decode_3dsolid_tests (void)
 
 /* Long inline strings/binary followed by small items exercise EED shrinking. */
 static void
-decode_eed_tests (void)
+decode_eed_tests (unsigned int opts)
 {
   Dwg_Version_Type versions[] = { R_12, R_2000, R_2010 };
   unsigned int v;
@@ -484,6 +484,7 @@ decode_eed_tests (void)
       dat.byte = 0;
       dat.bit = 0;
       dwg.object = &obj;
+      dwg.opts = opts;
       obj.size = 1024;
       obj.supertype = DWG_SUPERTYPE_OBJECT;
       obj.tio.object = &eed_obj;
@@ -512,14 +513,99 @@ decode_eed_tests (void)
                                : str->u.eed_0.string[64] == 0);
         }
       if (valid)
-        ok ("decode_eed: inline data and fixed-size items, version %d",
-            versions[v]);
+        valid = opts & DWG_OPTS_SKIP_EED_RAW
+                    ? eed_obj.eed[0].raw == NULL
+                    : eed_obj.eed[0].raw != NULL;
+      for (j = 1; valid && j < 4; j++)
+        valid = eed_obj.eed[j].raw == NULL;
+      if (valid)
+        ok ("decode_eed: inline data and fixed-size items, version %d, opts 0x%x",
+            versions[v], opts);
       else
         fail ("decode_eed: version %d, error 0x%x, count %u", versions[v],
               error, (unsigned)eed_obj.num_eed);
       dwg_free_eed (&obj);
       bitfree (&dat);
     }
+}
+
+/* A final padding byte must be skipped even when no raw copy is retained. */
+static void
+decode_eed_padding_tests (unsigned int opts)
+{
+  Bit_Chain dat = { 0 };
+  Dwg_Data dwg = { 0 };
+  Dwg_Object obj = { 0 };
+  Dwg_Object_Object eed_obj = { 0 };
+  Dwg_Handle handle = { 0 };
+  size_t end_byte;
+  unsigned char end_bit;
+  int error, valid;
+
+  bitprepare (&dat, 64);
+  handle.code = 5;
+  handle.size = 1;
+  handle.value = 1;
+  bit_write_BS (&dat, 4);
+  bit_write_H (&dat, &handle);
+  bit_write_RC (&dat, 70);
+  bit_write_RS (&dat, 1234);
+  bit_write_RC (&dat, 0xff);
+  bit_write_BS (&dat, 3);
+  bit_write_H (&dat, &handle);
+  bit_write_RC (&dat, 70);
+  bit_write_RS (&dat, 4321);
+  bit_write_BS (&dat, 0);
+  end_byte = dat.byte;
+  end_bit = dat.bit;
+  dat.byte = 0;
+  dat.bit = 0;
+  dwg.opts = opts;
+  dwg.object = &obj;
+  obj.size = 64;
+  obj.supertype = DWG_SUPERTYPE_OBJECT;
+  obj.tio.object = &eed_obj;
+  eed_obj.dwg = &dwg;
+
+  error = dwg_decode_eed (&dat, &eed_obj);
+  valid = !error && eed_obj.num_eed == 2 && dat.byte == end_byte
+          && dat.bit == end_bit;
+  if (valid)
+    valid = eed_obj.eed[0].data && eed_obj.eed[1].data
+            && eed_obj.eed[0].data->u.eed_70.rs == 1234
+            && eed_obj.eed[1].data->u.eed_70.rs == 4321;
+  if (valid)
+    valid = opts & DWG_OPTS_SKIP_EED_RAW
+                ? !eed_obj.eed[0].raw && !eed_obj.eed[1].raw
+                : eed_obj.eed[0].raw && eed_obj.eed[1].raw
+                      && eed_obj.eed[0].raw[3] == 0xff;
+  if (valid)
+    ok ("decode_eed: block boundary and raw retention, opts 0x%x", opts);
+  else
+    fail ("decode_eed: block boundary, opts 0x%x, error 0x%x", opts, error);
+  dwg_free_eed (&obj);
+  bitfree (&dat);
+}
+
+static void
+dwg_read_file_opts_tests (void)
+{
+  Dwg_Data dwg = { 0 };
+  int error;
+
+  dwg.opts = DWG_OPTS_SKIP_EED_RAW | DWG_OPTS_MINIMAL | 2;
+  /* The empty name fails after the input options have been preserved. */
+  error = dwg_read_file ("", &dwg);
+  if (error == DWG_ERR_IOERROR && dwg.opts == (DWG_OPTS_SKIP_EED_RAW | 2))
+    ok ("dwg_read_file: preserve skip-raw and loglevel, drop output options");
+  else
+    fail ("dwg_read_file: opts 0x%x, error 0x%x", dwg.opts, error);
+  dwg.opts = 2;
+  error = dwg_read_file ("", &dwg);
+  if (error == DWG_ERR_IOERROR && dwg.opts == 2)
+    ok ("dwg_read_file: raw retention remains the default");
+  else
+    fail ("dwg_read_file: default opts 0x%x, error 0x%x", dwg.opts, error);
 }
 
 int
@@ -535,7 +621,11 @@ main (int argc, char const *argv[])
   read_data_section_tests ();
   read_2004_compressed_section_tests ();
   decode_3dsolid_tests ();
-  decode_eed_tests ();
+  decode_eed_tests (0);
+  decode_eed_tests (DWG_OPTS_SKIP_EED_RAW);
+  decode_eed_padding_tests (0);
+  decode_eed_padding_tests (DWG_OPTS_SKIP_EED_RAW);
+  dwg_read_file_opts_tests ();
 
   return numfailed () ? 1 : 0;
 }

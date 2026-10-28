@@ -4138,12 +4138,15 @@ dwg_decode_eed (Bit_Chain *restrict dat, Dwg_Object_Object *restrict obj)
         }
 
       sav_byte = dat->byte;
-      obj->eed[idx].raw = bit_read_TF (dat, size);
-      LOG_TRACE ("EED[%u] raw: %d\n", idx, size);
-      LOG_INSANE_TF (obj->eed[idx].raw, size);
-      // LOG_TRACE ("\n");
-      dat->byte = sav_byte;
-      // LOG_RPOS
+      if (!(dwg->opts & DWG_OPTS_SKIP_EED_RAW))
+        {
+          obj->eed[idx].raw = bit_read_TF (dat, size);
+          LOG_TRACE ("EED[%u] raw: %d\n", idx, size);
+          LOG_INSANE_TF (obj->eed[idx].raw, size);
+          // LOG_TRACE ("\n");
+          dat->byte = sav_byte;
+          // LOG_RPOS
+        }
 
       while (dat->byte < end)
         {
@@ -4204,7 +4207,7 @@ dwg_decode_eed (Bit_Chain *restrict dat, Dwg_Object_Object *restrict obj)
             }
         }
       LOG_RPOS
-      if (obj->eed[idx].raw)
+      if (obj->eed[idx].raw || (dwg->opts & DWG_OPTS_SKIP_EED_RAW))
         {
           dat->byte = end;
           LOG_RPOS
