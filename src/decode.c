@@ -4147,6 +4147,9 @@ dwg_decode_eed (Bit_Chain *restrict dat, Dwg_Object_Object *restrict obj)
 
       while (dat->byte < end)
         {
+          size_t data_size;
+          Dwg_Eed_Data *data;
+
           obj->eed[idx].data = (Dwg_Eed_Data *)calloc (size + 8, 1);
           LOG_TRACE ("EED[%u] ", idx);
           error |= dwg_decode_eed_data (dat, obj->eed[idx].data, end, size);
@@ -4163,6 +4166,14 @@ dwg_decode_eed (Bit_Chain *restrict dat, Dwg_Object_Object *restrict obj)
               dat->byte = end; // skip eed
               continue;        // continue for next size = bit_read_BS(dat)
             }
+
+          /* The wire size is only an upper bound for this item.  Keep room
+             for the fixed-size union, inline string headers and a terminator,
+             including the two-byte terminator of R2007+ strings. */
+          data_size = MAX (sizeof (Dwg_Eed_Data), dat->byte - sav_byte + 8);
+          data = (Dwg_Eed_Data *)realloc (obj->eed[idx].data, data_size);
+          if (data)
+            obj->eed[idx].data = data;
 
           if (_obj->fixedtype == DWG_TYPE_MLEADERSTYLE
               && obj->tio.MLEADERSTYLE->class_version == 2

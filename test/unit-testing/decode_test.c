@@ -421,6 +421,107 @@ decode_3dsolid_tests (void)
   bitfree (&dat);
 }
 
+/* Long inline strings/binary followed by small items exercise EED shrinking. */
+static void
+decode_eed_tests (void)
+{
+  Dwg_Version_Type versions[] = { R_12, R_2000, R_2010 };
+  unsigned int v;
+
+  for (v = 0; v < ARRAY_SIZE (versions); v++)
+    {
+      Bit_Chain dat = { 0 };
+      Dwg_Data dwg = { 0 };
+      Dwg_Object obj = { 0 };
+      Dwg_Object_Object eed_obj = { 0 };
+      Dwg_Handle handle = { 0 };
+      BITCODE_BS size;
+      unsigned int j;
+      int error, valid;
+
+      bitprepare (&dat, 1024);
+      dat.from_version = dat.version = versions[v];
+      size = (versions[v] >= R_2007 ? 131
+              : versions[v] >= R_13b1 ? 68 : 66) + 66 + 3 + 25;
+      if (versions[v] >= R_13b1)
+        {
+          bit_write_BS (&dat, size);
+          handle.code = 5;
+          handle.size = 1;
+          handle.value = 1;
+          bit_write_H (&dat, &handle);
+        }
+      else
+        bit_write_RS (&dat, size);
+      bit_write_RC (&dat, 0);
+      if (versions[v] >= R_2007)
+        bit_write_RS (&dat, 64);
+      else
+        {
+          bit_write_RC (&dat, 64);
+          if (versions[v] >= R_13b1)
+            bit_write_RS_BE (&dat, 30);
+        }
+      for (j = 0; j < 64; j++)
+        {
+          if (versions[v] >= R_2007)
+            bit_write_RS (&dat, 0x4e2d);
+          else
+            bit_write_RC (&dat, 'A');
+        }
+      bit_write_RC (&dat, 4);
+      bit_write_RC (&dat, 64);
+      for (j = 0; j < 64; j++)
+        bit_write_RC (&dat, j + 1);
+      bit_write_RC (&dat, 70);
+      bit_write_RS (&dat, 1234);
+      bit_write_RC (&dat, 10);
+      bit_write_RD (&dat, 1.0);
+      bit_write_RD (&dat, 2.0);
+      bit_write_RD (&dat, 3.0);
+      if (versions[v] >= R_13b1)
+        bit_write_BS (&dat, 0);
+      dat.byte = 0;
+      dat.bit = 0;
+      dwg.object = &obj;
+      obj.size = 1024;
+      obj.supertype = DWG_SUPERTYPE_OBJECT;
+      obj.tio.object = &eed_obj;
+      eed_obj.dwg = &dwg;
+
+      error = dwg_decode_eed (&dat, &eed_obj);
+      valid = !error && eed_obj.num_eed == 4;
+      for (j = 0; valid && j < 4; j++)
+        valid = eed_obj.eed[j].data != NULL;
+      if (valid)
+        {
+          Dwg_Eed_Data *str = eed_obj.eed[0].data;
+          Dwg_Eed_Data *bin = eed_obj.eed[1].data;
+
+          valid = str->code == 0 && str->u.eed_0.length == 64
+                  && bin->code == 4 && bin->u.eed_4.length == 64
+                  && eed_obj.eed[2].data->u.eed_70.rs == 1234
+                  && eed_obj.eed[3].data->u.eed_10.point.z == 3.0;
+          for (j = 0; valid && j < 64; j++)
+            valid = bin->u.eed_4.data[j] == j + 1
+                    && (versions[v] >= R_2007
+                            ? str->u.eed_0_r2007.string[j] == 0x4e2d
+                            : str->u.eed_0.string[j] == 'A');
+          valid = valid && (versions[v] >= R_2007
+                               ? str->u.eed_0_r2007.string[64] == 0
+                               : str->u.eed_0.string[64] == 0);
+        }
+      if (valid)
+        ok ("decode_eed: inline data and fixed-size items, version %d",
+            versions[v]);
+      else
+        fail ("decode_eed: version %d, error 0x%x, count %u", versions[v],
+              error, (unsigned)eed_obj.num_eed);
+      dwg_free_eed (&obj);
+      bitfree (&dat);
+    }
+}
+
 int
 main (int argc, char const *argv[])
 {
@@ -434,6 +535,7 @@ main (int argc, char const *argv[])
   read_data_section_tests ();
   read_2004_compressed_section_tests ();
   decode_3dsolid_tests ();
+  decode_eed_tests ();
 
   return numfailed () ? 1 : 0;
 }
